@@ -10,6 +10,7 @@ var ABSTRACTS = null;        // sid -> text; lazily fetched (~3.9 MB)
 var ABSTRACTS_STATE = 'idle'; // idle | loading | ready | failed
 var OPEN_SID = null;         // talk currently shown in the detail dialog
 var PICKS = new Set();
+var NOTES = {};              // sid -> { text, revisit, contact }
 var PROFILE = '';
 var VIEW = 'programme';
 var DAY = null;
@@ -18,7 +19,13 @@ var RENDER_CAP = 600;
 var LS_PROFILES = 'icrs2026.profiles';
 var LS_CURRENT = 'icrs2026.current';
 var LS_PICKS = 'icrs2026.picks.';
+var LS_NOTES = 'icrs2026.notes.';
 var LS_HELP = 'icrs2026.helpSeen';
+var NOTE_MAX = 4000;
+var NOTE_TAGS = [
+  { id: 'revisit', label: 'Revisit' },
+  { id: 'contact', label: 'Contact' }
+];
 var NZ_OFFSET = 12;          // Auckland is UTC+12 (NZST) for 19-24 July 2026
 
 var $ = function (s) { return document.querySelector(s); };
@@ -102,10 +109,66 @@ function savePicks() {
   if (!PROFILE) return;
   writeJSON(LS_PICKS + PROFILE, Array.from(PICKS));
 }
+function loadNotes(name) {
+  var raw = readJSON(LS_NOTES + name, {});
+  var out = {};
+  Object.keys(raw).forEach(function (sid) {
+    var n = raw[sid];
+    if (!n || typeof n !== 'object') return;
+    out[sid] = {
+      text: String(n.text || '').slice(0, NOTE_MAX),
+      revisit: !!n.revisit,
+      contact: !!n.contact
+    };
+    if (!out[sid].text && !out[sid].revisit && !out[sid].contact) delete out[sid];
+  });
+  return out;
+}
+function saveNotes() {
+  if (!PROFILE) return;
+  var out = {};
+  Object.keys(NOTES).forEach(function (sid) {
+    var n = NOTES[sid];
+    if (!n) return;
+    if (n.text || n.revisit || n.contact) out[sid] = n;
+  });
+  writeJSON(LS_NOTES + PROFILE, out);
+}
+function getNote(sid) {
+  var n = NOTES[sid];
+  if (!n) return { text: '', revisit: false, contact: false };
+  return { text: n.text || '', revisit: !!n.revisit, contact: !!n.contact };
+}
+function hasNote(sid) {
+  var n = getNote(sid);
+  return !!(n.text || n.revisit || n.contact);
+}
+function noteBadgesHTML(sid) {
+  var n = getNote(sid);
+  var bits = [];
+  if (n.revisit) bits.push('<span class="note-tag revisit">revisit</span>');
+  if (n.contact) bits.push('<span class="note-tag contact">contact</span>');
+  if (n.text) bits.push('<span class="note-tag has-note" title="Has personal notes">note</span>');
+  return bits.length ? '<div class="note-badges">' + bits.join('') + '</div>' : '';
+}
+function patchNoteBadges(sid) {
+  var html = noteBadgesHTML(sid);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-talk="' + sid + '"]'), function (row) {
+    var box = row.querySelector('.note-badges');
+    if (html) {
+      if (box) box.outerHTML = html;
+      else {
+        var host = row.querySelector('.t-body') || row.querySelector('.m-body');
+        if (host) host.insertAdjacentHTML('beforeend', html);
+      }
+    } else if (box) box.remove();
+  });
+}
 function setProfile(name) {
   PROFILE = name;
   try { localStorage.setItem(LS_CURRENT, name); } catch (e) {}
   PICKS = loadPicks(name);
+  NOTES = loadNotes(name);
   el('profileName').textContent = name;
   el('profileInitials').textContent = initials(name);
   updateCount();
@@ -147,8 +210,10 @@ function matches(rec, f) {
   if (f.theme && String(s.theme) !== f.theme) return false;
   if (f.mine && !PICKS.has(t.sid)) return false;
   if (f.q) {
+    var note = getNote(t.sid);
     var hay = (t.title + ' ' + t.presenter + ' ' + (t.affiliation || '') + ' ' +
-               (t.authors || []).join(' ') + ' ' + s.title + ' ' + (s.code || '')).toLowerCase();
+               (t.authors || []).join(' ') + ' ' + s.title + ' ' + (s.code || '') +
+               ' ' + note.text).toLowerCase();
     if (hay.indexOf(f.q) === -1) return false;
   }
   return true;
@@ -275,7 +340,7 @@ function cardHTML(g, f) {
       '<div class="t-body"><div class="t-title">' + hi(t.title, f.q) + '</div>' +
       '<div class="t-who">' + hi((t.honorific ? t.honorific + ' ' : '') + t.presenter, f.q) +
       (t.affiliation ? ' <span class="aff">&middot; ' + hi(t.affiliation, f.q) + '</span>' : '') +
-      '</div></div>' +
+      '</div>' + noteBadgesHTML(t.sid) + '</div>' +
       '<button class="star" data-sid="' + t.sid + '" aria-pressed="' + on + '" ' +
       'aria-label="' + (on ? 'Remove from' : 'Add to') + ' my schedule" title="' + (on ? 'Remove from' : 'Add to') + ' my schedule">' +
       starSVG(on) + '</button></div>');
@@ -358,6 +423,7 @@ function renderMine() {
       ' &middot; ' + esc((r.talk.honorific ? r.talk.honorific + ' ' : '') + r.talk.presenter) + '</div>' +
       (c ? '<div class="clash-tag">⚠ Overlaps ' + esc(c[0].talk.title.slice(0, 40)) +
            (c.length > 1 ? ' +' + (c.length - 1) + ' more' : '') + '</div>' : '') +
+      noteBadgesHTML(r.talk.sid) +
       '</div>' +
       '<button class="star" data-sid="' + r.talk.sid + '" aria-pressed="true" aria-label="Remove from my schedule">' +
       starSVG(true) + '</button></div>');
@@ -414,12 +480,25 @@ function openTalk(sid) {
       esc(t.authors.join(', ')) + '</dd></div>');
   }
   body.push('<div id="absWrap" class="abstract"><h3>Abstract</h3><div id="absText"></div></div>');
+  body.push('<div class="my-notes" id="noteWrap">' +
+    '<h3>My notes</h3>' +
+    '<div class="note-tags" role="group" aria-label="Note tags">' +
+    NOTE_TAGS.map(function (t) {
+      return '<button type="button" class="note-tag-btn" data-tag="' + t.id + '" aria-pressed="false">' +
+        esc(t.label) + '</button>';
+    }).join('') +
+    '</div>' +
+    '<textarea id="noteText" rows="4" maxlength="' + NOTE_MAX + '" ' +
+    'placeholder="Your thoughts on this talk or speaker…"></textarea>' +
+    '<p class="note-hint">Saved on this device only. Tags show on the talk list.</p>' +
+    '</div>');
   el('talkBody').innerHTML = body.join('');
 
   var dlg = el('talkDlg');
   if (!dlg.open) dlg.showModal();       // open before filling: fillAbstract checks .open
   syncTalkStar();
   fillAbstract(sid);
+  fillNoteFields(sid);
   if (ABSTRACTS_STATE === 'idle') loadAbstracts();
   el('talkBody').scrollTop = 0;
 }
@@ -428,9 +507,55 @@ function openTalk(sid) {
    some engines (including Electron shells) never fire them, which would leave
    OPEN_SID pointing at a talk that is no longer on screen. */
 function closeTalk() {
+  saveOpenNote();
   OPEN_SID = null;
   var dlg = el('talkDlg');
   if (dlg.open) dlg.close();
+}
+
+function fillNoteFields(sid) {
+  var ta = el('noteText');
+  if (!ta) return;
+  var n = getNote(sid);
+  ta.value = n.text;
+  Array.prototype.forEach.call(document.querySelectorAll('.note-tag-btn'), function (btn) {
+    var on = !!n[btn.dataset.tag];
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+}
+
+function readNoteFromDialog() {
+  var ta = el('noteText');
+  if (!ta) return { text: '', revisit: false, contact: false };
+  var n = { text: ta.value.trim().slice(0, NOTE_MAX), revisit: false, contact: false };
+  Array.prototype.forEach.call(document.querySelectorAll('.note-tag-btn.is-on'), function (btn) {
+    n[btn.dataset.tag] = true;
+  });
+  return n;
+}
+
+function saveOpenNote() {
+  if (!OPEN_SID) return;
+  var sid = OPEN_SID;
+  var n = readNoteFromDialog();
+  if (n.text || n.revisit || n.contact) NOTES[sid] = n;
+  else delete NOTES[sid];
+  saveNotes();
+  patchNoteBadges(sid);
+}
+
+function toggleNoteTag(btn) {
+  if (!OPEN_SID) return;
+  var tag = btn.dataset.tag;
+  var n = readNoteFromDialog();
+  n[tag] = !n[tag];
+  if (n.text || n.revisit || n.contact) NOTES[OPEN_SID] = n;
+  else delete NOTES[OPEN_SID];
+  saveNotes();
+  btn.classList.toggle('is-on', n[tag]);
+  btn.setAttribute('aria-pressed', String(n[tag]));
+  patchNoteBadges(OPEN_SID);
 }
 
 function fillAbstract(sid) {
@@ -493,6 +618,10 @@ function buildICS() {
       (r.talk.affiliation ? ' (' + r.talk.affiliation + ')' : '') +
       (r.session.code ? '\nSession ' + r.session.code + ' — ' + r.session.title : '') +
       ((r.talk.authors && r.talk.authors.length > 1) ? '\nAuthors: ' + r.talk.authors.join(', ') : '');
+    var note = getNote(r.talk.sid);
+    if (note.text) desc += '\n\nMy notes: ' + note.text;
+    if (note.revisit) desc += '\nTag: revisit';
+    if (note.contact) desc += '\nTag: contact';
     L.push('BEGIN:VEVENT');
     L.push('UID:' + r.talk.id + '@icrs2026-planner');
     L.push('DTSTAMP:' + stamp);
@@ -584,7 +713,9 @@ function saveProfileFromInput() {
     else list = list.filter(function (x) { return x !== old; });
     saveProfiles(list);
     writeJSON(LS_PICKS + name, Array.from(PICKS));
+    writeJSON(LS_NOTES + name, NOTES);
     try { localStorage.removeItem(LS_PICKS + old); } catch (e) {}
+    try { localStorage.removeItem(LS_NOTES + old); } catch (e) {}
   } else if (list.indexOf(name) === -1) {
     list.push(name);
     saveProfiles(list);
@@ -721,6 +852,7 @@ function wire() {
         var list = profiles().filter(function (x) { return x !== n; });
         saveProfiles(list);
         try { localStorage.removeItem(LS_PICKS + n); } catch (err) {}
+        try { localStorage.removeItem(LS_NOTES + n); } catch (err) {}
         if (n === PROFILE) {
           if (list.length) setProfile(list[0]);
           else { PROFILE = ''; PICKS = new Set(); el('profileDlg').close(); openProfile(true); return; }
@@ -749,11 +881,24 @@ function wire() {
 
   el('talkClose').addEventListener('click', closeTalk);
   el('talkDlg').addEventListener('close', function () { OPEN_SID = null; });
-  el('talkDlg').addEventListener('cancel', function () { OPEN_SID = null; });
+  el('talkDlg').addEventListener('cancel', function () { saveOpenNote(); OPEN_SID = null; });
   // click the backdrop to dismiss
   el('talkDlg').addEventListener('click', function (ev) {
     if (ev.target === el('talkDlg')) closeTalk();
   });
+  el('talkBody').addEventListener('click', function (ev) {
+    var tagBtn = ev.target.closest('.note-tag-btn');
+    if (tagBtn) { ev.preventDefault(); toggleNoteTag(tagBtn); }
+  });
+  var noteTimer;
+  el('talkBody').addEventListener('input', function (ev) {
+    if (ev.target.id !== 'noteText') return;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(saveOpenNote, 400);
+  });
+  el('talkBody').addEventListener('blur', function (ev) {
+    if (ev.target.id === 'noteText') saveOpenNote();
+  }, true);
   el('talkStar').addEventListener('click', function () {
     if (!OPEN_SID) return;
     toggle(OPEN_SID);

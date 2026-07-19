@@ -255,6 +255,32 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 .abstract h3{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--teal)}
 .abstract p{margin:0 0 9px;font-size:13.5px;line-height:1.62;max-width:62ch}
 .abstract em{font-style:italic}
+.my-notes{border-top:1px solid var(--line);margin-top:12px;padding-top:11px}
+.my-notes h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--teal)}
+.note-tags{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+.note-tag-btn{
+  border:1px solid var(--line);background:var(--bg);color:var(--ink-2);
+  border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+}
+.note-tag-btn:hover{border-color:var(--teal);color:var(--teal)}
+.note-tag-btn.is-on{background:var(--teal);border-color:var(--teal);color:#fff}
+.note-tag-btn.is-on[data-tag="revisit"]{background:var(--sun);border-color:var(--sun);color:#fff}
+.note-tag-btn.is-on[data-tag="contact"]{background:var(--coral);border-color:var(--coral);color:#fff}
+#noteText{
+  width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px;line-height:1.45;
+  resize:vertical;min-height:88px;
+}
+#noteText:focus{outline:2px solid var(--teal-2);outline-offset:1px}
+.note-hint{margin:7px 0 0;font-size:11px;color:var(--ink-3)}
+.note-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.note-tag{
+  display:inline-block;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;
+  letter-spacing:.2px;text-transform:lowercase;
+}
+.note-tag.revisit{background:color-mix(in srgb,var(--sun) 18%,transparent);color:var(--sun)}
+.note-tag.contact{background:color-mix(in srgb,var(--coral) 16%,transparent);color:var(--coral)}
+.note-tag.has-note{background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--teal)}
 .talk-dlg-foot{padding:11px 15px;border-top:1px solid var(--line);background:var(--bg)}
 .talk-dlg-foot .btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%}
 .talk-dlg-foot .btn[aria-pressed="true"]{color:var(--coral);border-color:var(--coral)}

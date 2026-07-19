@@ -32,6 +32,8 @@ var cloudPullTimer = null;
 var cloudBusy = false;
 var syncCloudReady = false;
 var syncLocalDirty = false;
+var upNextTimer = null;
+var UP_NEXT_MINS = 30;
 var NOTE_MAX = 4000;
 var NOTE_TAGS = [
   { id: 'revisit', label: 'Revisit' },
@@ -538,6 +540,101 @@ function renderMine() {
     prev = r;
   });
   el('content').innerHTML = html.join('');
+}
+
+/* ---------- render: up next (personal site) ---------- */
+function venueNow() {
+  var parts = {};
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Pacific/Auckland',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(new Date()).forEach(function (p) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  });
+  return {
+    date: parts.year + '-' + parts.month + '-' + parts.day,
+    mins: parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10)
+  };
+}
+function upNextPicks(windowMins) {
+  var now = venueNow();
+  return myPicks().filter(function (r) {
+    if (r.session.date !== now.date) return false;
+    var ts = mins(r.talk.start);
+    var te = mins(r.talk.end);
+    if (te <= now.mins) return false;
+    if (ts <= now.mins && now.mins < te) return true;
+    return ts > now.mins && ts <= now.mins + windowMins;
+  });
+}
+function upNextStatus(r, now) {
+  var ts = mins(r.talk.start);
+  var te = mins(r.talk.end);
+  if (ts <= now.mins && now.mins < te) return { label: 'Now', live: true };
+  var until = ts - now.mins;
+  if (until <= 1) return { label: 'in 1 min', live: false };
+  return { label: 'in ' + until + ' min', live: false };
+}
+function renderUpNext() {
+  var now = venueNow();
+  var day = DATA.days.find(function (x) { return x.date === now.date; });
+  if (!day) {
+    el('content').innerHTML = '<div class="empty"><h3>Nothing on today</h3>' +
+      '<p>This tab tracks your picks for <b>today</b> (Auckland time). The symposium runs 19&ndash;24 July.</p></div>';
+    return;
+  }
+  if (!PICKS.size) {
+    el('content').innerHTML = '<div class="empty"><h3>No talks picked yet</h3>' +
+      '<p>Star talks in <b>Programme</b> or <b>My schedule</b> to see what&rsquo;s up next here.</p></div>';
+    return;
+  }
+  var list = upNextPicks(UP_NEXT_MINS);
+  var clock = hhmm(String(Math.floor(now.mins / 60)).padStart(2, '0') + ':' +
+    String(now.mins % 60).padStart(2, '0'));
+  var html = [
+    '<p class="upnext-lead">Auckland <b>' + esc(clock) + '</b> · ' + esc(day.label) +
+      ' · starred talks in the next ' + UP_NEXT_MINS + ' minutes</p>'
+  ];
+  if (!list.length) {
+    html.push('<div class="empty"><h3>Clear for the next ' + UP_NEXT_MINS + ' minutes</h3>' +
+      '<p>None of your picks start soon. Check <b>My schedule</b> for the full day.</p></div>');
+    el('content').innerHTML = html.join('');
+    return;
+  }
+  var clash = findClashes(list);
+  list.forEach(function (r) {
+    var st = upNextStatus(r, now);
+    var c = clash.get(r.talk.sid);
+    html.push('<div class="mine-row upnext-row' + (st.live ? ' is-live' : '') + (c ? ' clash' : '') +
+      '" data-talk="' + r.talk.sid + '" tabindex="0" role="button" aria-label="Open details">' +
+      '<span class="m-time">' + hhmm(r.talk.start) + '–' + hhmm(r.talk.end) + '</span>' +
+      '<div class="m-body"><div class="m-title">' + esc(r.talk.title) + '</div>' +
+      '<div class="m-meta">' + esc(roomLabel(r.session.room)) +
+      (roomLevel(r.session.room) ? ' &middot; ' + esc(roomLevel(r.session.room)) : '') +
+      ' &middot; ' + esc((r.talk.honorific ? r.talk.honorific + ' ' : '') + r.talk.presenter) + '</div>' +
+      '<span class="upnext-when' + (st.live ? ' is-live' : '') + '">' + esc(st.label) + '</span>' +
+      (c ? '<div class="clash-tag">⚠ Overlaps another pick</div>' : '') +
+      noteBadgesHTML(r.talk.sid) +
+      '</div>' +
+      '<button class="star" data-sid="' + r.talk.sid + '" aria-pressed="true" aria-label="Remove from my schedule">' +
+      starSVG(true) + '</button></div>');
+  });
+  el('content').innerHTML = html.join('');
+}
+function stopUpNextTimer() {
+  if (upNextTimer) { clearInterval(upNextTimer); upNextTimer = null; }
+}
+function startUpNextTimer() {
+  stopUpNextTimer();
+  if (VIEW !== 'upnext') return;
+  upNextTimer = setInterval(function () {
+    if (VIEW === 'upnext') renderUpNext();
+  }, 30000);
+}
+function updatePersonalUI() {
+  var tab = el('upnextTab');
+  if (tab) tab.hidden = !CROSS_DEVICE_SYNC;
 }
 
 /* ---------- talk detail ---------- */
@@ -1168,6 +1265,7 @@ function updateCount() {
 }
 function render() {
   if (VIEW === 'mine') renderMine();
+  else if (VIEW === 'upnext') renderUpNext();
   else if (VIEW === 'share') renderShare();
   else renderProgramme();
 }
@@ -1179,7 +1277,7 @@ function toggle(sid) {
   // A full re-render of a day is ~600 rows; doing that on every star tap feels
   // sluggish on a phone. Patch the affected rows in place instead, and only
   // re-render when the toggle actually changes which rows belong on screen.
-  if (VIEW === 'mine' || el('onlyMine').checked) { render(); return; }
+  if (VIEW === 'mine' || VIEW === 'upnext' || el('onlyMine').checked) { render(); return; }
 
   var on = PICKS.has(sid);
   var label = (on ? 'Remove from' : 'Add to') + ' my schedule';
@@ -1234,6 +1332,8 @@ function setView(v) {
   });
   el('programmeControls').hidden = v !== 'programme';
   el('mineControls').hidden = v !== 'mine';
+  if (v === 'upnext') startUpNextTimer();
+  else stopUpNextTimer();
   window.scrollTo(0, 0);
   render();
 }
@@ -1423,6 +1523,7 @@ function boot() {
       else if (list.length) setProfile(list[0]);
 
       var imported = importFromHash();
+      updatePersonalUI();
       updateCloudSyncUI();
       startCloudSyncLoop();
       if (CLOUD_SYNC && syncRoom()) pullCloudSync(true);

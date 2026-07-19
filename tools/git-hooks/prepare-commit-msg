@@ -1,0 +1,7 @@
+#!/bin/sh
+# Strip Cursor/agent co-author trailers injected by the IDE.
+MSG_FILE="$1"
+case "$(uname -s)" in
+  Darwin) sed -i '' '/^Co-authored-by: Cursor /d' "$MSG_FILE" ;;
+  *) sed -i '/^Co-authored-by: Cursor /d' "$MSG_FILE" ;;
+esac

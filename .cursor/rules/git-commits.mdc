@@ -1,0 +1,11 @@
+---
+description: Git commit message standards for this repo
+alwaysApply: true
+---
+
+# Git commits
+
+When creating git commits in this repository:
+
+- Never add `Co-authored-by:` trailers (including `Co-authored-by: Cursor` or any Cursor/agent attribution).
+- Commit messages should contain only the subject and body the user would expect — no tool or AI attribution lines.

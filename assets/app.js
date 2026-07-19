@@ -30,6 +30,8 @@ var SYNC_WORDS = ['coral', 'reef', 'tide', 'kelp', 'shell', 'wave', 'fin', 'bay'
 var cloudPushTimer = null;
 var cloudPullTimer = null;
 var cloudBusy = false;
+var syncCloudReady = false;
+var syncLocalDirty = false;
 var NOTE_MAX = 4000;
 var NOTE_TAGS = [
   { id: 'revisit', label: 'Revisit' },
@@ -115,7 +117,7 @@ function loadPicks(name) { return new Set(readJSON(LS_PICKS + name, [])); }
 function savePicks() {
   if (!PROFILE) return;
   writeJSON(LS_PICKS + PROFILE, Array.from(PICKS));
-  scheduleCloudPush();
+  markSyncDirty();
 }
 function loadNotes(name) {
   var raw = readJSON(LS_NOTES + name, {});
@@ -141,7 +143,7 @@ function saveNotes() {
     if (n.text || n.revisit || n.contact) out[sid] = n;
   });
   writeJSON(LS_NOTES + PROFILE, out);
-  scheduleCloudPush();
+  markSyncDirty();
 }
 function getNote(sid) {
   var n = NOTES[sid];
@@ -794,13 +796,25 @@ function restoreBackup(data) {
   if (!confirm('Restore picks and notes for ' + n + ' profile' + (n === 1 ? '' : 's') +
       ' from this backup? Existing data for those names will be replaced.')) return;
   applyBackup(data);
-  scheduleCloudPush();
+  markSyncDirty();
 }
 function pickRestoreFile() {
   el('restoreFile').click();
 }
 
 /* ---------- share & cloud sync (orlando-code site) ---------- */
+function backupStats(data) {
+  if (!data || !Array.isArray(data.profiles)) return { picks: 0, notes: 0 };
+  var picks = 0, notes = 0;
+  data.profiles.forEach(function (p) {
+    picks += (data.picks[p] || []).length;
+    Object.keys(data.notes[p] || {}).forEach(function (sid) {
+      var n = data.notes[p][sid];
+      if (n && (n.text || n.revisit || n.contact)) notes++;
+    });
+  });
+  return { picks: picks, notes: notes };
+}
 function syncRoom() {
   try { return (localStorage.getItem(LS_SYNC_ROOM) || '').toLowerCase().trim(); } catch (e) { return ''; }
 }
@@ -822,65 +836,97 @@ function setSyncRoom(code, opts) {
   var room = normalizeSyncCode(code);
   if (!room) return false;
   try { localStorage.setItem(LS_SYNC_ROOM, room); } catch (e) { return false; }
+  syncCloudReady = false;
+  syncLocalDirty = false;
   if (el('syncCodeInput')) el('syncCodeInput').value = room;
   updateCloudSyncUI();
   if (!opts.quiet) toast('Sync code set — loading from cloud…');
   pullCloudSync(true);
   return true;
 }
+function markSyncDirty() {
+  syncLocalDirty = true;
+  scheduleCloudPush();
+}
+function fetchCloudRoom(room) {
+  return fetch(SYNC_URL + '/' + encodeURIComponent(room), { cache: 'no-store' })
+    .then(function (r) {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+}
+function shouldApplyRemote(remote) {
+  if (!remote || !remote.at || !remote.data) return false;
+  if (remote.at > syncAt()) return true;
+  var rs = backupStats(remote.data);
+  var ls = backupStats(buildBackup());
+  return rs.picks + rs.notes > ls.picks + ls.notes;
+}
+function applyRemote(remote, opts) {
+  opts = opts || {};
+  if (!remote || !remote.at || !remote.data) return false;
+  if (!opts.force && !shouldApplyRemote(remote)) return false;
+  cloudBusy = true;
+  applyBackup(remote.data, { silent: true });
+  setSyncAt(remote.at);
+  syncLocalDirty = false;
+  cloudBusy = false;
+  syncCloudReady = true;
+  updateCloudSyncUI();
+  if (opts.toast) toast('Synced from cloud.');
+  return true;
+}
 function cloudPayload() {
   return { at: Date.now(), data: buildBackup() };
 }
 function scheduleCloudPush() {
-  if (!CLOUD_SYNC || !syncRoom() || cloudBusy) return;
+  if (!CLOUD_SYNC || !syncRoom() || cloudBusy || !syncCloudReady) return;
   clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(pushCloudSync, 1500);
 }
 function pushCloudSync() {
   var room = syncRoom();
-  if (!room || !CLOUD_SYNC || cloudBusy) return;
-  var payload = cloudPayload();
+  if (!room || !CLOUD_SYNC || cloudBusy || !syncCloudReady || !syncLocalDirty) return;
   updateCloudSyncStatus('saving');
-  fetch(SYNC_URL + '/' + encodeURIComponent(room), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function (r) {
-    if (r.ok) {
-      setSyncAt(payload.at);
-      updateCloudSyncStatus('synced');
-    } else updateCloudSyncStatus('error');
-  }).catch(function () { updateCloudSyncStatus('offline'); });
+  fetchCloudRoom(room)
+    .then(function (remote) {
+      if (remote && shouldApplyRemote(remote)) {
+        applyRemote(remote, { silent: true });
+        return;
+      }
+      var payload = cloudPayload();
+      if (remote && remote.at >= payload.at) payload.at = remote.at + 1;
+      return fetch(SYNC_URL + '/' + encodeURIComponent(room), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        if (r.ok) {
+          setSyncAt(payload.at);
+          syncLocalDirty = false;
+          updateCloudSyncUI();
+        } else updateCloudSyncStatus('error');
+      });
+    })
+    .catch(function () { updateCloudSyncStatus('offline'); });
 }
 function pullCloudSync(force) {
   var room = syncRoom();
   if (!room || !CLOUD_SYNC) return Promise.resolve(false);
   if (!force && cloudBusy) return Promise.resolve(false);
   updateCloudSyncStatus('pulling');
-  return fetch(SYNC_URL + '/' + encodeURIComponent(room), { cache: 'no-store' })
-    .then(function (r) {
-      if (r.status === 404) {
-        if (force) scheduleCloudPush();
-        updateCloudSyncStatus('synced');
-        return false;
-      }
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
+  return fetchCloudRoom(room)
     .then(function (remote) {
-      if (!remote || !remote.at || !remote.data) return false;
-      var localAt = syncAt();
-      if (!force && remote.at <= localAt) {
-        updateCloudSyncStatus('synced');
+      if (!remote) {
+        syncCloudReady = true;
+        if (force && syncLocalDirty) scheduleCloudPush();
+        updateCloudSyncUI();
         return false;
       }
-      cloudBusy = true;
-      applyBackup(remote.data, { silent: true });
-      setSyncAt(remote.at);
-      cloudBusy = false;
-      updateCloudSyncStatus('synced');
-      if (force) toast('Synced from cloud.');
-      return true;
+      var applied = applyRemote(remote, { force: force, toast: force });
+      if (!applied) updateCloudSyncUI();
+      return applied;
     })
     .catch(function () {
       updateCloudSyncStatus('offline');
@@ -900,19 +946,13 @@ function startCloudSyncLoop() {
 function updateCloudSyncStatus(state) {
   var elStatus = el('cloudSyncStatus');
   if (!elStatus) return;
-  var labels = {
-    synced: 'Up to date',
-    saving: 'Saving…',
-    pulling: 'Checking…',
-    offline: 'Offline',
-    error: 'Sync error'
-  };
-  elStatus.textContent = labels[state] || '';
   elStatus.dataset.state = state || '';
+  updateCloudSyncUI();
 }
 function updateCloudSyncUI() {
   var panel = el('cloudSyncPanel');
   var note = el('mineNote');
+  var elStatus = el('cloudSyncStatus');
   if (!CROSS_DEVICE_SYNC) return;
   if (panel) panel.hidden = false;
   if (note) {
@@ -923,10 +963,22 @@ function updateCloudSyncUI() {
   var hint = el('cloudSyncHint');
   if (hint) {
     hint.textContent = SYNC_URL
-      ? 'Use the same code on your phone and laptop. Picks and notes update automatically — no links to copy.'
+      ? 'Enter the same code on each device (copy from your laptop). Tap Sync now if picks or notes look stale.'
       : 'Cloud sync needs a one-time worker deploy (see worker/deploy.sh), then set your worker URL in assets/sync-config.js.';
   }
-  updateCloudSyncStatus(syncRoom() ? (SYNC_URL ? 'synced' : 'offline') : '');
+  if (elStatus) {
+    var state = elStatus.dataset.state || (syncRoom() ? 'synced' : '');
+    var labels = {
+      synced: 'Up to date',
+      saving: 'Saving…',
+      pulling: 'Checking…',
+      offline: 'Offline',
+      error: 'Sync error'
+    };
+    var s = backupStats(buildBackup());
+    var extra = (s.picks || s.notes) ? ' · ' + s.picks + '★ ' + s.notes + ' notes' : '';
+    elStatus.textContent = (labels[state] || '') + extra;
+  }
 }
 function buildShareHash() {
   if (!PROFILE) return '';
@@ -1035,7 +1087,7 @@ function importFromHash(opts) {
   writeJSON(LS_PICKS + PROFILE, Array.from(PICKS));
   updateCount();
   history.replaceState(null, '', location.pathname + location.search);
-  scheduleCloudPush();
+  markSyncDirty();
 
   if (!opts.quiet) {
     toast('Imported ' + valid.length + ' talk' + (valid.length === 1 ? '' : 's') + '.');
@@ -1074,7 +1126,7 @@ function saveProfileFromInput() {
   setProfile(name);
   el('profileDlg').close();
   render();
-  scheduleCloudPush();
+  markSyncDirty();
   setTimeout(maybeShowHelp, 80);
 }
 
@@ -1182,10 +1234,6 @@ function setView(v) {
   });
   el('programmeControls').hidden = v !== 'programme';
   el('mineControls').hidden = v !== 'mine';
-  if (v === 'mine' && CLOUD_SYNC && PROFILE && !syncRoom()) {
-    setSyncRoom(genSyncCode(), { quiet: true });
-    scheduleCloudPush();
-  }
   window.scrollTo(0, 0);
   render();
 }
@@ -1305,11 +1353,16 @@ function wire() {
   }
   if (el('btnSyncGen')) {
     el('btnSyncGen').addEventListener('click', function () {
+      if (syncRoom() && !confirm('Create a new sync code? Other devices will keep the old code until you update them.')) return;
       setSyncRoom(genSyncCode());
-      scheduleCloudPush();
+      markSyncDirty();
     });
   }
   if (el('btnSyncCopy')) el('btnSyncCopy').addEventListener('click', copySyncCode);
+  if (el('btnSyncNow')) el('btnSyncNow').addEventListener('click', function () {
+    if (!syncRoom()) { toast('Enter or generate a sync code first.'); return; }
+    pullCloudSync(true);
+  });
   el('btnNotesMd').addEventListener('click', downloadNotesMd);
   el('btnBackup').addEventListener('click', downloadBackup);
   el('btnRestore').addEventListener('click', pickRestoreFile);

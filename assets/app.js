@@ -25,9 +25,6 @@ var LS_SYNC_ROOM = 'icrs2026.syncRoom';
 var LS_SYNC_AT = 'icrs2026.syncAt';
 var CROSS_DEVICE_SYNC = /orlando-code\.github\.io$/i.test(location.hostname);
 var SYNC_URL = (window.ICRS_SYNC_URL || '').replace(/\/$/, '');
-if (!SYNC_URL && CROSS_DEVICE_SYNC) {
-  SYNC_URL = 'https://icrs2026-sync.orlando-code.workers.dev';
-}
 var CLOUD_SYNC = CROSS_DEVICE_SYNC && !!SYNC_URL;
 var SYNC_WORDS = ['coral', 'reef', 'tide', 'kelp', 'shell', 'wave', 'fin', 'bay', 'manta', 'nemo'];
 var cloudPushTimer = null;
@@ -923,7 +920,13 @@ function updateCloudSyncUI() {
   }
   var input = el('syncCodeInput');
   if (input && document.activeElement !== input) input.value = syncRoom();
-  updateCloudSyncStatus(syncRoom() ? 'synced' : '');
+  var hint = el('cloudSyncHint');
+  if (hint) {
+    hint.textContent = SYNC_URL
+      ? 'Use the same code on your phone and laptop. Picks and notes update automatically — no links to copy.'
+      : 'Cloud sync needs a one-time worker deploy (see worker/deploy.sh), then set your worker URL in assets/sync-config.js.';
+  }
+  updateCloudSyncStatus(syncRoom() ? (SYNC_URL ? 'synced' : 'offline') : '');
 }
 function buildShareHash() {
   if (!PROFILE) return '';
@@ -1179,7 +1182,7 @@ function setView(v) {
   });
   el('programmeControls').hidden = v !== 'programme';
   el('mineControls').hidden = v !== 'mine';
-  if (v === 'mine' && CROSS_DEVICE_SYNC && PROFILE && !syncRoom()) {
+  if (v === 'mine' && CLOUD_SYNC && PROFILE && !syncRoom()) {
     setSyncRoom(genSyncCode(), { quiet: true });
     scheduleCloudPush();
   }

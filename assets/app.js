@@ -525,13 +525,59 @@ function shareURL() {
 }
 function copyShare() {
   if (!PICKS.size) { toast('Pick some talks first.'); return; }
-  var url = shareURL();
-  var done = function () { toast('Share link copied — open it on your phone.'); };
+  copyText(shareURL(), 'Share link copied — open it on your phone.');
+}
+function siteURL() {
+  return location.origin + location.pathname;
+}
+function copyText(url, okMsg) {
+  var done = function () { toast(okMsg); };
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(url).then(done, function () { prompt('Copy this link:', url); });
   } else {
     prompt('Copy this link:', url);
   }
+}
+function copySiteLink() {
+  copyText(siteURL(), 'Site link copied.');
+}
+var QR_LOAD = null;
+function loadQR() {
+  if (typeof qrcode === 'function') return Promise.resolve();
+  if (QR_LOAD) return QR_LOAD;
+  QR_LOAD = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'assets/qrcode.js';
+    s.onload = resolve;
+    s.onerror = function () { QR_LOAD = null; reject(new Error('load failed')); };
+    document.body.appendChild(s);
+  });
+  return QR_LOAD;
+}
+function renderShare() {
+  var url = siteURL();
+  el('content').innerHTML =
+    '<div class="qr-panel">' +
+      '<p class="qr-lead">Scan this code to open the ICRS 2026 planner on another phone or laptop.</p>' +
+      '<div class="qr-box" id="qrBox" aria-busy="true">Loading QR code…</div>' +
+      '<p class="qr-url" id="qrUrl">' + esc(url) + '</p>' +
+      '<button id="btnCopySite" class="btn" type="button">Copy link</button>' +
+    '</div>';
+  el('btnCopySite').addEventListener('click', copySiteLink);
+  loadQR().then(function () {
+    var qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    el('qrBox').innerHTML = qr.createSvgTag({
+      cellSize: 8,
+      margin: 2,
+      alt: { text: 'QR code linking to ' + url }
+    });
+    el('qrBox').removeAttribute('aria-busy');
+  }).catch(function () {
+    el('qrBox').innerHTML = '<p class="qr-fail">Could not load the QR code. Use the link below instead.</p>';
+    el('qrBox').removeAttribute('aria-busy');
+  });
 }
 function importFromHash() {
   var h = location.hash || '';
@@ -633,7 +679,9 @@ function updateCount() {
   c.setAttribute('data-zero', PICKS.size ? '0' : '1');
 }
 function render() {
-  if (VIEW === 'mine') renderMine(); else renderProgramme();
+  if (VIEW === 'mine') renderMine();
+  else if (VIEW === 'share') renderShare();
+  else renderProgramme();
 }
 function toggle(sid) {
   if (PICKS.has(sid)) PICKS.delete(sid); else PICKS.add(sid);

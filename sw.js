@@ -10,6 +10,7 @@ var ASSETS = [
   'index.html',
   'assets/styles.css',
   'assets/app.js',
+  'assets/qrcode.js',
   'assets/icon.svg',
   'data/programme.json',
   'manifest.webmanifest'

@@ -202,6 +202,20 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 /* empty / notes */
 .empty{text-align:center;padding:44px 16px;color:var(--ink-3)}
 .empty h3{margin:0 0 6px;color:var(--ink-2);font-size:15px}
+
+/* share / qr tab */
+.qr-panel{text-align:center;padding:28px 16px 44px;max-width:380px;margin:0 auto}
+.qr-lead{margin:0 0 18px;font-size:14px;color:var(--ink-2);line-height:1.45}
+.qr-box{
+  background:#fff;border-radius:var(--r);padding:14px;display:inline-block;
+  box-shadow:var(--shadow);margin:0 auto 14px;color:var(--ink-3);font-size:13px;
+}
+.qr-box svg{display:block;max-width:100%;height:auto;border-radius:4px}
+.qr-url{
+  margin:0 0 14px;font-size:12px;color:var(--ink-2);word-break:break-all;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+.qr-fail{margin:0;font-size:13px;color:var(--ink-2)}
 .note{
   background:color-mix(in srgb,var(--sun) 12%,transparent);border:1px solid color-mix(in srgb,var(--sun) 35%,transparent);
   border-radius:var(--r);padding:9px 11px;font-size:12px;color:var(--ink-2);margin:10px 0;

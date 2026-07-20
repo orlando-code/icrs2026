@@ -90,7 +90,8 @@ a{color:var(--teal)}
 .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);pointer-events:none}
 #q{
   width:100%;padding:10px 34px;border:1px solid var(--line);border-radius:var(--r);
-  background:var(--panel);color:var(--ink);font:inherit;
+  background:var(--panel);color:var(--ink);font:inherit;font-size:16px;
+  max-width:100%;box-sizing:border-box;
 }
 #q:focus,select:focus,.filter-check:focus-within{outline:2px solid var(--teal-2);outline-offset:1px}
 .q-clear{
@@ -99,7 +100,7 @@ a{color:var(--teal)}
 }
 select,.filter-check{
   min-height:38px;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r);
-  background:var(--panel);color:var(--ink);font:inherit;font-size:13px;
+  background:var(--panel);color:var(--ink);font:inherit;font-size:16px;
 }
 select{
   flex:1 1 140px;padding:8px 10px;min-width:0;
@@ -243,7 +244,8 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 .cloud-sync-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .cloud-sync-input{
   flex:1 1 160px;min-width:0;border:1px solid var(--line);border-radius:var(--r);
-  padding:8px 10px;font:inherit;font-size:13px;background:var(--panel);color:var(--ink);
+  padding:8px 10px;font:inherit;font-size:16px;background:var(--panel);color:var(--ink);
+  max-width:100%;box-sizing:border-box;
 }
 .cloud-sync-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px color-mix(in srgb,var(--teal) 18%,transparent)}
 .btn{
@@ -313,12 +315,12 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 }
 
 /* dialog */
-.dlg{border:0;border-radius:16px;padding:0;max-width:400px;width:calc(100% - 28px);box-shadow:0 24px 60px -12px rgba(0,0,0,.45);background:var(--panel);color:var(--ink)}
+.dlg{border:0;border-radius:16px;padding:0;max-width:min(400px,calc(100vw - 28px));width:calc(100% - 28px);box-shadow:0 24px 60px -12px rgba(0,0,0,.45);background:var(--panel);color:var(--ink);overflow-x:clip}
 .dlg::backdrop{background:rgba(4,20,25,.55);backdrop-filter:blur(2px)}
 .dlg-in{padding:18px}
 .dlg h2{margin:0 0 4px;font-size:17px}
 .dlg-sub{margin:0 0 13px;font-size:12.5px;color:var(--ink-3);line-height:1.45}
-#nameInput{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);font:inherit}
+#nameInput{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);font:inherit;font-size:16px;max-width:100%;box-sizing:border-box}
 #nameInput:focus{outline:2px solid var(--teal-2);outline-offset:1px}
 .profile-list{display:flex;flex-direction:column;gap:5px;margin-top:11px;max-height:180px;overflow:auto}
 .profile-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--bg);font-size:13px}
@@ -330,8 +332,8 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 .dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin:16px 0 0;padding:0}
 
 /* talk detail dialog */
-.dlg-talk{max-width:min(660px,calc(100vw - 22px));width:calc(100% - 22px)}
-.talk-dlg{display:flex;flex-direction:column;max-height:86vh}
+.dlg-talk{max-width:min(660px,calc(100vw - 22px));width:calc(100% - 22px);overflow-x:clip}
+.talk-dlg{display:flex;flex-direction:column;max-height:86vh;max-width:100%;overflow-x:clip}
 .talk-dlg-head{
   display:flex;gap:10px;align-items:flex-start;padding:15px 15px 12px;
   border-bottom:1px solid var(--line);
@@ -351,7 +353,7 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
   width:28px;height:28px;border-radius:50%;font-size:19px;line-height:1;
 }
 .icon-btn:hover{background:rgba(255,255,255,.3)}
-.talk-dlg-body{padding:14px 15px;overflow:auto;-webkit-overflow-scrolling:touch}
+.talk-dlg-body{padding:14px 15px;overflow:auto;overflow-x:clip;-webkit-overflow-scrolling:touch;min-width:0;max-width:100%}
 .dl{display:flex;gap:10px;margin-bottom:9px;font-size:12.5px}
 .dl dt{flex:none;width:72px;color:var(--ink-3);font-weight:600}
 .dl dd{margin:0;flex:1;min-width:0;line-height:1.45}
@@ -360,7 +362,7 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 .abstract h3{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--teal)}
 .abstract p{margin:0 0 9px;font-size:13.5px;line-height:1.62;max-width:62ch}
 .abstract em{font-style:italic}
-.my-notes{border-top:1px solid var(--line);margin-top:12px;padding-top:11px}
+.my-notes{border-top:1px solid var(--line);margin-top:12px;padding-top:11px;min-width:0;max-width:100%;overflow-x:clip}
 .my-notes h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--teal)}
 .note-tags{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
 .note-tag-btn{
@@ -373,8 +375,8 @@ mark{background:color-mix(in srgb,var(--sun) 45%,transparent);color:inherit;bord
 .note-tag-btn.is-on[data-tag="contact"]{background:var(--coral);border-color:var(--coral);color:#fff}
 #noteText{
   width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:var(--r);
-  background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px;line-height:1.45;
-  resize:vertical;min-height:88px;
+  background:var(--bg);color:var(--ink);font:inherit;font-size:16px;line-height:1.45;
+  resize:vertical;min-height:88px;max-width:100%;box-sizing:border-box;
 }
 #noteText:focus{outline:2px solid var(--teal-2);outline-offset:1px}
 .note-hint{margin:7px 0 0;font-size:11px;color:var(--ink-3)}

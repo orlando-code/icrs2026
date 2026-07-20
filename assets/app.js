@@ -37,7 +37,7 @@ var NZ_OFFSET = 12;          // Auckland is UTC+12 (NZST) for 19-24 July 2026
 var SORT = 'time';
 var upNextTimer = null;
 var UP_NEXT_MINS = 30;
-var PAST_HIDE_BUFFER = 5;
+var PAST_HIDE_BUFFER = 20;
 /* Explicit user collapse choices only: { id: true|false }. An id that is absent
    means "use the default for this group" -- which lets poster blocks start
    collapsed while ordinary sessions start open, without the two states fighting. */
@@ -228,7 +228,7 @@ function noteFilterEmptyHTML(f) {
 function programmeEmptyHTML(f) {
   if (f.hidePast) {
     return '<div class="empty"><h3>All talks finished</h3>' +
-      '<p>Every talk on this day has ended (with a ' + PAST_HIDE_BUFFER + '-minute buffer). Turn off <b>Hide finished talks</b> to see them.</p></div>';
+    '<p>Every talk on this day meeting your filter criteria has ended (with a ' + PAST_HIDE_BUFFER + '-minute buffer). Turn off <b>Hide finished talks</b> to see them.</p></div>';
   }
   if (f.notes || f.revisit || f.contact) return noteFilterEmptyHTML(f);
   return '<div class="empty"><h3>No talks match</h3><p>Try a different day, room, or search term.</p></div>';

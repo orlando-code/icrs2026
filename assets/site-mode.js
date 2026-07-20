@@ -4,8 +4,8 @@
   var path = location.pathname;
   var mode = 'public';
   if (/orlando-code\.github\.io$/i.test(host)) {
-    if (/^\/icrs2026-staging(\/|$)/.test(path)) mode = 'staging';
-    else if (/^\/icrs2026(\/|$)/.test(path)) mode = 'personal';
+    if (/^\/icrs2026-staging(?:\/|$)/.test(path)) mode = 'staging';
+    else if (/^\/icrs2026(?:\/|$)/.test(path)) mode = 'personal';
   } else if (/nirivas\.github\.io$/i.test(host)) {
     mode = 'nico';
   }

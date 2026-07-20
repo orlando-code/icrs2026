@@ -26,6 +26,8 @@ var LS_SYNC_ROOM = 'icrs2026.syncRoom';
 var LS_SYNC_AT = 'icrs2026.syncAt';
 var LS_PROG_LAYOUT = 'icrs2026.progLayout';
 var LS_NOTICE = 'icrs2026.noticeSeen';
+var LS_HIDE_PAST = 'icrs2026.hidePast';
+var SS_DAY_PINNED = 'icrs2026.dayPinned';
 var SITE_MODE = window.ICRS_SITE_MODE || 'public';
 var STAGING_SITE = SITE_MODE === 'staging';
 var ENHANCED_UI = SITE_MODE !== 'public';
@@ -270,6 +272,10 @@ function programmeEmptyHTML(f) {
     return '<div class="empty"><h3>No picks match</h3>' +
       '<p>None of your picks match this day or filter. Try another day or turn off <b>My picks</b>.</p></div>';
   }
+  if (f.hidePast) {
+    return '<div class="empty"><h3>All talks finished</h3>' +
+      '<p>Every talk on this day has ended (with a 15-minute buffer). Turn off <b>Hide finished talks</b> to see them.</p></div>';
+  }
   return '<div class="empty"><h3>No talks match</h3><p>Try a different day, room, or search term.</p></div>';
 }
 function noteBadgesHTML(sid) {
@@ -376,7 +382,7 @@ function programmeRecs(f) {
   });
 }
 function programmeEvents(f) {
-  var plain = !f.q && !f.room && !f.theme && !f.mine && !f.notes && !f.revisit && !f.contact;
+  var plain = !f.q && !f.room && !f.theme && !f.mine && !f.notes && !f.revisit && !f.contact && !f.hidePast;
   if (!plain) return [];
   return DATA.events.filter(function (e) {
     return DAY === 'all' || e.date === DAY;
@@ -566,6 +572,7 @@ function venueSlotEnded(date, endTime, now) {
   return mins(endTime) <= now.mins;
 }
 function talkEndedWithBuffer(date, endTime, now) {
+  if (!endTime) return false;
   now = now || venueNow();
   if (date < now.date) return true;
   if (date > now.date) return false;
@@ -1631,8 +1638,32 @@ function buildFilters() {
   }).join('') + '<button class="day-tab" data-day="all"><span>All</span><small>' + TALKS.length + ' talks</small></button>';
 }
 
-function setDay(d) {
+function pinnedDay() {
+  try { return sessionStorage.getItem(SS_DAY_PINNED) || ''; } catch (e) { return ''; }
+}
+function restoreHidePast() {
+  var box = el('hidePast');
+  if (!box) return;
+  try {
+    if (localStorage.getItem(LS_HIDE_PAST) === '1') box.checked = true;
+  } catch (e) {}
+}
+function saveHidePast() {
+  var box = el('hidePast');
+  if (!box) return;
+  try { localStorage.setItem(LS_HIDE_PAST, box.checked ? '1' : '0'); } catch (e) {}
+}
+function applyInitialDay() {
+  var pinned = pinnedDay();
+  setDay(pinned || pickInitialDay());
+}
+
+function setDay(d, opts) {
+  opts = opts || {};
   DAY = d;
+  if (opts.user) {
+    try { sessionStorage.setItem(SS_DAY_PINNED, d); } catch (e) {}
+  }
   Array.prototype.forEach.call(document.querySelectorAll('.day-tab'), function (b) {
     b.classList.toggle('is-on', b.dataset.day === d);
   });
@@ -1666,7 +1697,7 @@ function wire() {
       return;
     }
     var tab = e.target.closest('.day-tab');
-    if (tab) { setDay(tab.dataset.day); return; }
+    if (tab) { setDay(tab.dataset.day, { user: true }); return; }
     var vt = e.target.closest('.view-tab');
     if (vt) { setView(vt.dataset.view); return; }
     var del = e.target.closest('[data-del]');
@@ -1765,7 +1796,11 @@ function wire() {
   el('onlyNotes').addEventListener('change', render);
   el('onlyRevisit').addEventListener('change', render);
   el('onlyContact').addEventListener('change', render);
-  if (el('hidePast')) el('hidePast').addEventListener('change', render);
+  restoreHidePast();
+  if (el('hidePast')) el('hidePast').addEventListener('change', function () {
+    saveHidePast();
+    render();
+  });
   var progLayout = el('progLayoutWrap');
   if (progLayout) {
     progLayout.addEventListener('click', function (e) {
@@ -1861,7 +1896,7 @@ function boot() {
       updateCloudSyncUI();
       startCloudSyncLoop();
       if (CLOUD_SYNC && syncRoom()) pullCloudSync(true);
-      setDay(pickInitialDay());
+      applyInitialDay();
       setView('programme');
       if (!PROFILE && !imported) openProfile(true);
       // if a profile already exists (returning user, or opened via a share link),
@@ -1887,6 +1922,10 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   });
 }
 window.addEventListener('pageshow', function () {
+  if (DATA && VIEW === 'programme' && !pinnedDay()) {
+    var d = pickInitialDay();
+    if (d !== DAY) setDay(d);
+  }
   if (CLOUD_SYNC && syncRoom() && DATA) pullCloudSync(false);
 });
 el('content').innerHTML = '<div class="loading">Loading the programme…</div>';

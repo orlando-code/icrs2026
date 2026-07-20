@@ -1,7 +1,7 @@
 /* Offline support. The programme is static, so cache-first is correct and the
    whole app works with no wifi once it has been opened once. Bump CACHE when
    data/programme.json is rebuilt so clients pick up the new data. */
-var CACHE = 'icrs2026-v12';
+var CACHE = 'icrs2026-v13';
 // data/abstracts.json (~3.9 MB) is deliberately NOT precached: it would make
 // install slow on venue wifi. The app fetches it in the background after first
 // render and the runtime cache below picks it up, so offline still gets it.
@@ -9,6 +9,7 @@ var ASSETS = [
   './',
   'index.html',
   'assets/styles.css',
+  'assets/personal.css',
   'assets/app.js',
   'assets/sync-config.js',
   'assets/qrcode.js',

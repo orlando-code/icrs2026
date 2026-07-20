@@ -20,6 +20,7 @@ var LS_PROFILES = 'icrs2026.profiles';
 var LS_CURRENT = 'icrs2026.current';
 var LS_PICKS = 'icrs2026.picks.';
 var LS_NOTES = 'icrs2026.notes.';
+var LS_PICKS_META = 'icrs2026.picksMeta.';
 var LS_HELP = 'icrs2026.helpSeen';
 var LS_SYNC_ROOM = 'icrs2026.syncRoom';
 var LS_SYNC_AT = 'icrs2026.syncAt';
@@ -114,6 +115,23 @@ function writeJSON(k, v) {
   try { localStorage.setItem(k, JSON.stringify(v)); }
   catch (e) { toast('Could not save — browser storage is full or blocked.'); }
 }
+function touchPickMeta(sid, on) {
+  if (!PROFILE) return;
+  var meta = readJSON(LS_PICKS_META + PROFILE, {});
+  meta[sid] = { on: !!on, at: Date.now() };
+  writeJSON(LS_PICKS_META + PROFILE, meta);
+}
+function touchPickMetaMany(sids, on) {
+  if (!PROFILE || !sids.length) return;
+  var meta = readJSON(LS_PICKS_META + PROFILE, {});
+  var at = Date.now();
+  sids.forEach(function (sid) { meta[sid] = { on: !!on, at: at }; });
+  writeJSON(LS_PICKS_META + PROFILE, meta);
+}
+function stampNote(n) {
+  n.at = Date.now();
+  return n;
+}
 function profiles() { return readJSON(LS_PROFILES, []); }
 function saveProfiles(list) { writeJSON(LS_PROFILES, list); }
 function loadPicks(name) { return new Set(readJSON(LS_PICKS + name, [])); }
@@ -131,7 +149,8 @@ function loadNotes(name) {
     out[sid] = {
       text: String(n.text || '').slice(0, NOTE_MAX),
       revisit: !!n.revisit,
-      contact: !!n.contact
+      contact: !!n.contact,
+      at: parseInt(n.at, 10) || 0
     };
     if (!out[sid].text && !out[sid].revisit && !out[sid].contact) delete out[sid];
   });
@@ -139,13 +158,36 @@ function loadNotes(name) {
 }
 function saveNotes() {
   if (!PROFILE) return;
-  var out = {};
+  var raw = readJSON(LS_NOTES + PROFILE, {});
   Object.keys(NOTES).forEach(function (sid) {
     var n = NOTES[sid];
     if (!n) return;
-    if (n.text || n.revisit || n.contact) out[sid] = n;
+    raw[sid] = {
+      text: n.text,
+      revisit: !!n.revisit,
+      contact: !!n.contact,
+      at: n.at || Date.now()
+    };
   });
-  writeJSON(LS_NOTES + PROFILE, out);
+  writeJSON(LS_NOTES + PROFILE, raw);
+  markSyncDirty();
+}
+function persistNote(sid, n) {
+  if (!PROFILE) return;
+  var raw = readJSON(LS_NOTES + PROFILE, {});
+  if (n.text || n.revisit || n.contact) {
+    var st = stampNote({
+      text: n.text,
+      revisit: !!n.revisit,
+      contact: !!n.contact
+    });
+    NOTES[sid] = st;
+    raw[sid] = st;
+  } else {
+    delete NOTES[sid];
+    raw[sid] = stampNote({ text: '', revisit: false, contact: false });
+  }
+  writeJSON(LS_NOTES + PROFILE, raw);
   markSyncDirty();
 }
 function getNote(sid) {
@@ -719,6 +761,11 @@ function startUpNextTimer() {
   }, 30000);
 }
 function updatePersonalUI() {
+  document.documentElement.classList.toggle('site-personal', CROSS_DEVICE_SYNC);
+  if (CROSS_DEVICE_SYNC) {
+    var theme = document.querySelector('meta[name="theme-color"]');
+    if (theme) theme.content = '#3d2067';
+  }
   var tab = el('upnextTab');
   if (tab) tab.hidden = !CROSS_DEVICE_SYNC;
   updateProgLayoutUI();
@@ -846,9 +893,7 @@ function saveOpenNote() {
   var sid = OPEN_SID;
   var had = matchesNoteFilters(sid, currentFilters());
   var n = readNoteFromDialog();
-  if (n.text || n.revisit || n.contact) NOTES[sid] = n;
-  else delete NOTES[sid];
-  saveNotes();
+  persistNote(sid, n);
   patchNoteBadges(sid);
   if (noteFilterMatchChanged(sid, had)) render();
 }
@@ -859,9 +904,8 @@ function toggleNoteTag(btn) {
   var had = matchesNoteFilters(OPEN_SID, currentFilters());
   var n = readNoteFromDialog();
   n[tag] = !n[tag];
-  if (n.text || n.revisit || n.contact) NOTES[OPEN_SID] = n;
-  else delete NOTES[OPEN_SID];
-  saveNotes();
+  if (n.text || n.revisit || n.contact) persistNote(OPEN_SID, n);
+  else persistNote(OPEN_SID, { text: '', revisit: false, contact: false });
   btn.classList.toggle('is-on', n[tag]);
   btn.setAttribute('aria-pressed', String(n[tag]));
   patchNoteBadges(OPEN_SID);
@@ -967,7 +1011,11 @@ function applyBackup(data, opts) {
   var list = profiles();
   data.profiles.forEach(function (name) {
     if (list.indexOf(name) === -1) list.push(name);
-    writeJSON(LS_PICKS + name, data.picks[name] || []);
+    var pickList = data.picks[name] || [];
+    writeJSON(LS_PICKS + name, pickList);
+    var meta = {};
+    pickList.forEach(function (sid) { meta[sid] = { on: true, at: Date.now() }; });
+    writeJSON(LS_PICKS_META + name, meta);
     writeJSON(LS_NOTES + name, data.notes[name] || {});
   });
   saveProfiles(list);
@@ -1051,29 +1099,146 @@ function fetchCloudRoom(room) {
       return r.json();
     });
 }
-function shouldApplyRemote(remote) {
-  if (!remote || !remote.at || !remote.data) return false;
-  if (remote.at > syncAt()) return true;
-  var rs = backupStats(remote.data);
-  var ls = backupStats(buildBackup());
-  return rs.picks + rs.notes > ls.picks + ls.notes;
+function upgradeSyncData(data, remoteAt) {
+  if (!data) return null;
+  if (data.v === 2) return data;
+  if (data.v !== 1 || data.app !== 'icrs2026' || !Array.isArray(data.profiles)) return null;
+  var at = remoteAt || 0;
+  var picksMeta = {}, notes = {};
+  data.profiles.forEach(function (p) {
+    picksMeta[p] = {};
+    (data.picks[p] || []).forEach(function (sid) {
+      picksMeta[p][sid] = { on: true, at: at };
+    });
+    notes[p] = {};
+    Object.keys(data.notes[p] || {}).forEach(function (sid) {
+      var n = data.notes[p][sid];
+      notes[p][sid] = {
+        text: n.text || '',
+        revisit: !!n.revisit,
+        contact: !!n.contact,
+        at: n.at || at
+      };
+    });
+  });
+  return {
+    v: 2,
+    app: 'icrs2026',
+    current: data.current,
+    profiles: data.profiles.slice(),
+    picks: data.picks,
+    picksMeta: picksMeta,
+    notes: notes
+  };
 }
-function applyRemote(remote, opts) {
+function mergePickMeta(localMeta, remoteMeta, remotePicks) {
+  localMeta = localMeta || {};
+  remoteMeta = remoteMeta || {};
+  if (!Object.keys(remoteMeta).length && remotePicks && remotePicks.length) {
+    remotePicks.forEach(function (sid) { remoteMeta[sid] = { on: true, at: 0 }; });
+  }
+  var merged = {}, sids = {}, pickList = [];
+  Object.keys(localMeta).forEach(function (sid) { sids[sid] = 1; });
+  Object.keys(remoteMeta).forEach(function (sid) { sids[sid] = 1; });
+  Object.keys(sids).forEach(function (sid) {
+    var l = localMeta[sid];
+    var r = remoteMeta[sid];
+    var winner;
+    if (!l) winner = r;
+    else if (!r) winner = l;
+    else winner = l.at >= r.at ? l : r;
+    if (!winner) return;
+    merged[sid] = winner;
+    if (winner.on) pickList.push(sid);
+  });
+  return { meta: merged, picks: pickList };
+}
+function mergeNoteMaps(localNotes, remoteNotes) {
+  localNotes = localNotes || {};
+  remoteNotes = remoteNotes || {};
+  var merged = {}, sids = {};
+  Object.keys(localNotes).forEach(function (sid) { sids[sid] = 1; });
+  Object.keys(remoteNotes).forEach(function (sid) { sids[sid] = 1; });
+  Object.keys(sids).forEach(function (sid) {
+    var l = localNotes[sid] || {};
+    var r = remoteNotes[sid] || {};
+    var lAt = parseInt(l.at, 10) || 0;
+    var rAt = parseInt(r.at, 10) || 0;
+    var w = lAt >= rAt ? l : r;
+    if (!w) return;
+    var n = {
+      text: String(w.text || '').slice(0, NOTE_MAX),
+      revisit: !!w.revisit,
+      contact: !!w.contact,
+      at: Math.max(lAt, rAt) || Date.now()
+    };
+    if (n.text || n.revisit || n.contact) merged[sid] = n;
+    else merged[sid] = { text: '', revisit: false, contact: false, at: n.at };
+  });
+  return merged;
+}
+function buildSyncPayload() {
+  var profs = profiles();
+  var picks = {}, picksMeta = {}, notes = {};
+  profs.forEach(function (n) {
+    picks[n] = readJSON(LS_PICKS + n, []);
+    picksMeta[n] = readJSON(LS_PICKS_META + n, {});
+    notes[n] = readJSON(LS_NOTES + n, {});
+  });
+  return {
+    v: 2,
+    app: 'icrs2026',
+    current: PROFILE,
+    profiles: profs,
+    picks: picks,
+    picksMeta: picksMeta,
+    notes: notes
+  };
+}
+function mergeSyncPayload(remote, opts) {
   opts = opts || {};
-  if (!remote || !remote.at || !remote.data) return false;
-  if (!opts.force && !shouldApplyRemote(remote)) return false;
+  if (!remote) return false;
+  var data = upgradeSyncData(remote.data || remote, remote.at);
+  if (!data) return false;
+
   cloudBusy = true;
-  applyBackup(remote.data, { silent: true });
-  setSyncAt(remote.at);
+  var localProfs = profiles();
+  var allProfs = localProfs.slice();
+  data.profiles.forEach(function (p) {
+    if (allProfs.indexOf(p) === -1) allProfs.push(p);
+  });
+  saveProfiles(allProfs);
+
+  allProfs.forEach(function (name) {
+    var picksMerged = mergePickMeta(
+      readJSON(LS_PICKS_META + name, {}),
+      data.picksMeta[name] || {},
+      data.picks[name] || []
+    );
+    writeJSON(LS_PICKS_META + name, picksMerged.meta);
+    writeJSON(LS_PICKS + name, picksMerged.picks);
+    writeJSON(LS_NOTES + name, mergeNoteMaps(readJSON(LS_NOTES + name, {}), data.notes[name] || {}));
+  });
+
+  if (data.current) {
+    try { localStorage.setItem(LS_CURRENT, data.current); } catch (e) {}
+  }
+  var who = PROFILE && allProfs.indexOf(PROFILE) !== -1 ? PROFILE : '';
+  if (!who && data.current && allProfs.indexOf(data.current) !== -1) who = data.current;
+  else if (!who && allProfs.length) who = allProfs[0];
+  if (who) setProfile(who);
+  else updateCount();
+  render();
+  setSyncAt(Math.max(syncAt(), remote.at || 0));
   syncLocalDirty = false;
   cloudBusy = false;
   syncCloudReady = true;
   updateCloudSyncUI();
-  if (opts.toast) toast('Synced from cloud.');
+  if (opts.toast) toast('Synced — newest change on each item wins.');
   return true;
 }
 function cloudPayload() {
-  return { at: Date.now(), data: buildBackup() };
+  return { at: Date.now(), data: buildSyncPayload() };
 }
 function scheduleCloudPush() {
   if (!CLOUD_SYNC || !syncRoom() || cloudBusy || !syncCloudReady) return;
@@ -1086,12 +1251,8 @@ function pushCloudSync() {
   updateCloudSyncStatus('saving');
   fetchCloudRoom(room)
     .then(function (remote) {
-      if (remote && shouldApplyRemote(remote)) {
-        applyRemote(remote, { silent: true });
-        return;
-      }
+      if (remote) mergeSyncPayload(remote, { silent: true });
       var payload = cloudPayload();
-      if (remote && remote.at >= payload.at) payload.at = remote.at + 1;
       return fetch(SYNC_URL + '/' + encodeURIComponent(room), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1119,7 +1280,7 @@ function pullCloudSync(force) {
         updateCloudSyncUI();
         return false;
       }
-      var applied = applyRemote(remote, { force: force, toast: force });
+      var applied = mergeSyncPayload(remote, { toast: force });
       if (!applied) updateCloudSyncUI();
       return applied;
     })
@@ -1151,14 +1312,14 @@ function updateCloudSyncUI() {
   if (!CROSS_DEVICE_SYNC) return;
   if (panel) panel.hidden = false;
   if (note) {
-    note.innerHTML = 'Picks and notes are saved in this browser and <b>synced automatically</b> when you use the same sync code on another device. Clearing site data removes them locally — your cloud copy stays until you change the code.';
+    note.innerHTML = 'Picks and notes sync across devices with the same code. Each star or note keeps its own timestamp — <b>the newest change wins</b>, on any device.';
   }
   var input = el('syncCodeInput');
   if (input && document.activeElement !== input) input.value = syncRoom();
   var hint = el('cloudSyncHint');
   if (hint) {
     hint.textContent = SYNC_URL
-      ? 'Enter the same code on each device (copy from your laptop). Tap Sync now if picks or notes look stale.'
+      ? 'Enter the same code on each device. Conflicts resolve by most recently edited pick or note — not by device.'
       : 'Cloud sync needs a one-time worker deploy (see worker/deploy.sh), then set your worker URL in assets/sync-config.js.';
   }
   if (elStatus) {
@@ -1280,6 +1441,7 @@ function importFromHash(opts) {
   if (who !== PROFILE) setProfile(who);
   PICKS = new Set(valid);
   writeJSON(LS_PICKS + PROFILE, Array.from(PICKS));
+  touchPickMetaMany(valid, true);
   updateCount();
   history.replaceState(null, '', location.pathname + location.search);
   markSyncDirty();
@@ -1368,7 +1530,9 @@ function render() {
   else renderProgramme();
 }
 function toggle(sid) {
-  if (PICKS.has(sid)) PICKS.delete(sid); else PICKS.add(sid);
+  var on = !PICKS.has(sid);
+  if (on) PICKS.add(sid); else PICKS.delete(sid);
+  touchPickMeta(sid, on);
   savePicks();
   updateCount();
 
@@ -1588,6 +1752,7 @@ function wire() {
   el('btnClear').addEventListener('click', function () {
     if (!PICKS.size) { toast('Nothing to clear.'); return; }
     if (confirm('Remove all ' + PICKS.size + ' picks from "' + PROFILE + '"?')) {
+      touchPickMetaMany(Array.from(PICKS), false);
       PICKS = new Set(); savePicks(); updateCount(); render(); toast('Picks cleared.');
     }
   });

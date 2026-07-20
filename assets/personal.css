@@ -1,0 +1,40 @@
+/* Orlando fork — twilight palette (distinct from the main reef-teal site) */
+html.site-personal{
+  --deep:#3d2067; --teal:#7c4dff; --teal-2:#9d74ff; --coral:#ff9f43; --sun:#ffd166;
+  --bg:#f8f4ff; --panel:#fff; --line:#e4dcf0; --ink:#2a1838; --ink-2:#5f4d72; --ink-3:#8f7fa3;
+  --shadow:0 1px 2px rgba(61,32,103,.07),0 8px 22px -10px rgba(61,32,103,.18);
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){
+  html.site-personal{
+    --bg:#140d1f; --panel:#1f152c; --line:#342748; --ink:#f2ebff; --ink-2:#c4b3d9; --ink-3:#9584ab;
+    --deep:#2a1840; --teal:#9d74ff; --teal-2:#b794ff; --coral:#ffb366; --sun:#ffe08a;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 26px -12px rgba(0,0,0,.65);
+  }
+}
+html.site-personal .topbar{
+  background:linear-gradient(135deg,#2a1840 0%,#6b3fa0 55%,#7c4dff 100%);
+}
+html.site-personal .brand-mark{color:#e8d4ff}
+html.site-personal .count{background:var(--coral)}
+html.site-personal .view-tab.is-on{color:var(--teal)}
+html.site-personal .day-tab.is-on{background:var(--teal);border-color:var(--teal)}
+html.site-personal .btn-primary{background:var(--teal);border-color:var(--teal)}
+html.site-personal .btn-primary:hover{background:var(--teal-2);border-color:var(--teal-2)}
+html.site-personal .star[aria-pressed="true"]{color:var(--coral)}
+html.site-personal .talk.is-on{background:color-mix(in srgb,var(--coral) 8%,transparent)}
+html.site-personal .upnext-row.is-live,
+html.site-personal .time-slot-head{color:var(--teal)}
+html.site-personal .upnext-when.is-live{background:var(--teal);border-color:var(--teal)}
+html.site-personal .cloud-sync{
+  background:color-mix(in srgb,var(--teal) 9%,var(--panel));
+  border-color:color-mix(in srgb,var(--teal) 24%,var(--line));
+}
+html.site-personal .mine-note{
+  background:color-mix(in srgb,var(--sun) 14%,transparent);
+  border-color:color-mix(in srgb,var(--sun) 35%,transparent);
+}
+html.site-personal .code{background:var(--teal)}
+html.site-personal .card[data-kind="poster"] .code{background:var(--sun);color:#3a2800}
+html.site-personal .card[data-kind="plenary"] .code,
+html.site-personal .card[data-kind="special"] .code{background:var(--coral)}

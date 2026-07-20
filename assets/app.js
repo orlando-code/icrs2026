@@ -327,6 +327,14 @@ function hi(text, q) {
   return e.slice(0, i) + '<mark>' + e.slice(i, i + q.length) + '</mark>' + e.slice(i + q.length);
 }
 
+function programmeEvents(f) {
+  var plain = !f.q && !f.room && !f.theme && !f.notes && !f.revisit && !f.contact;
+  if (!plain) return [];
+  return DATA.events.filter(function (e) {
+    return DAY === 'all' || e.date === DAY;
+  });
+}
+
 /* ---------- sort + collapse (view-only preferences) ----------
    These describe how sessions are grouped on screen. They never read or write
    picks/notes; the only persisted state is the mode and the collapsed id list. */
@@ -455,11 +463,8 @@ function renderProgramme() {
   });
 
   // Venue-wide items (registration, teas, lunches, socials) are context, not
-  // choices, so they only show when the user is not narrowing the list down.
-  var plain = !f.q && !f.room && !f.theme && !f.notes && !f.revisit && !f.contact && !f.hidePast;
-  var evts = plain ? DATA.events.filter(function (e) {
-    return DAY === 'all' || e.date === DAY;
-  }) : [];
+  // choices — always show unless other filters are active (not hide-finished).
+  var evts = programmeEvents(f);
 
   if (!recs.length && (f.notes || f.revisit || f.contact || !evts.length)) {
     el('content').innerHTML = programmeEmptyHTML(f);
@@ -548,10 +553,7 @@ function renderProgrammeByTime() {
       String(a.session.room).localeCompare(String(b.session.room)) ||
       a.talk.title.localeCompare(b.talk.title);
   });
-  var plain = !f.q && !f.room && !f.theme && !f.notes && !f.revisit && !f.contact && !f.hidePast;
-  var evts = plain ? DATA.events.filter(function (e) {
-    return DAY === 'all' || e.date === DAY;
-  }) : [];
+  var evts = programmeEvents(f);
 
   if (!recs.length && (f.notes || f.revisit || f.contact || !evts.length)) {
     el('content').innerHTML = programmeEmptyHTML(f);

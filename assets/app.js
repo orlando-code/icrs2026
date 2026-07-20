@@ -915,7 +915,7 @@ function renderMine() {
       (roomLevel(r.session.room) ? ' &middot; ' + esc(roomLevel(r.session.room)) : '') +
       (r.session.code ? ' &middot; ' + esc(r.session.code) : '') +
       ' &middot; ' + esc((r.talk.honorific ? r.talk.honorific + ' ' : '') + r.talk.presenter) + '</div>' +
-      (c ? '<div class="clash-tag">⚠ Overlaps ' + esc(c[0].talk.title.slice(0, 40)) +
+      (c ? '<div class="clash-tag">⚠ Overlaps ' + esc(c[0].talk.title.length > 40 ? c[0].talk.title.slice(0, 40) + '...' : c[0].talk.title) +
            (c.length > 1 ? ' +' + (c.length - 1) + ' more' : '') + '</div>' : '') +
       noteBadgesHTML(r.talk.sid) +
       '</div>' +

@@ -277,7 +277,7 @@ function updateCloudSyncUI() {
     if (note) {
       note.innerHTML = STAGING_SITE
         ? 'Picks and notes are stored in this browser only. Clearing site data removes them.'
-        : 'Picks and notes are stored in this browser only. Clearing site data removes them. Share links move picks between devices, not notes — use <b>Backup</b> / <b>Restore</b> for that.';
+        : 'Picks and notes are stored in this browser only. Clearing site data removes them. Use <b>Backup</b> / <b>Restore</b> to move them between devices.';
     }
     return;
   }

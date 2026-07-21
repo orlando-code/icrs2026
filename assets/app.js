@@ -1075,7 +1075,7 @@ function openTalk(sid) {
     '<textarea id="noteText" rows="4" maxlength="' + NOTE_MAX + '" ' +
     'placeholder="Your thoughts on this talk..."></textarea>' +
     '<div class="note-actions"><button type="button" id="noteDone" class="btn note-done">Done</button></div>' +
-    '<p class="note-hint"><b>Notes stay on this device.</b> They are lost if you clear browser data and are not sent via share links. Use <b>Notes (.md)</b> or <b>Backup</b> in My schedule to keep a copy.</p>' +
+    '<p class="note-hint"><b>Notes stay on this device.</b> They are lost if you clear browser data. Use <b>Notes (.md)</b> or <b>Backup</b> in My schedule to keep a copy.</p>' +
     '</div>');
   body.push('<div id="absWrap" class="abstract"><h3>Abstract</h3><div id="absText"></div></div>');
   el('talkBody').innerHTML = body.join('');
@@ -1328,15 +1328,7 @@ function pickRestoreFile() {
   el('restoreFile').click();
 }
 
-/* ---------- share ---------- */
-function shareURL() {
-  var sids = myPicks().map(function (r) { return r.talk.sid; }).join('');
-  return location.origin + location.pathname + '#n=' + encodeURIComponent(PROFILE) + '&s=' + sids;
-}
-function copyShare() {
-  if (!PICKS.size) { toast('Pick some talks first.'); return; }
-  copyText(shareURL(), 'Share link copied — open it on your phone.');
-}
+/* ---------- site link (Share tab) ---------- */
 function siteURL() {
   return location.origin + location.pathname;
 }
@@ -1389,36 +1381,6 @@ function renderShare() {
     el('qrBox').removeAttribute('aria-busy');
   });
 }
-function importFromHash() {
-  var h = location.hash || '';
-  var ms = h.match(/[#&]s=([0-9a-fA-F]+)/);
-  if (!ms) return false;
-  var name = '';
-  var mn = h.match(/[#&]n=([^&]*)/);
-  if (mn) { try { name = decodeURIComponent(mn[1]); } catch (e) { name = ''; } }
-  var sids = ms[1].match(/.{1,8}/g) || [];
-  var valid = sids.filter(function (s) { return BY_SID.has(s); });
-  history.replaceState(null, '', location.pathname + location.search);
-  if (!valid.length) { toast('That share link had no talks we recognise.'); return false; }
-
-  var who = (name || 'Shared schedule').slice(0, 40);
-  var msg = 'Import ' + valid.length + ' talk' + (valid.length === 1 ? '' : 's') +
-    ' from a shared schedule into the profile "' + who + '"?' +
-    (valid.length < sids.length ? '\n\n(' + (sids.length - valid.length) +
-      ' entr' + (sids.length - valid.length === 1 ? 'y is' : 'ies are') +
-      ' not in the current programme and will be skipped.)' : '');
-  if (!window.confirm(msg)) return false;
-
-  var list = profiles();
-  if (list.indexOf(who) === -1) { list.push(who); saveProfiles(list); }
-  setProfile(who);
-  PICKS = new Set(valid);
-  savePicks();
-  updateCount();
-  toast('Imported ' + valid.length + ' talks into "' + who + '".');
-  return true;
-}
-
 /* ---------- profile dialog ---------- */
 function openProfile(first) {
   var dlg = el('profileDlg');
@@ -1785,7 +1747,6 @@ function wire() {
   }
   if (el('hidePast')) el('hidePast').addEventListener('change', onHidePastChange);
   if (el('hidePastMine')) el('hidePastMine').addEventListener('change', onHidePastChange);
-  el('btnShare').addEventListener('click', copyShare);
   el('btnIcs').addEventListener('click', downloadICS);
   el('btnNotesMd').addEventListener('click', downloadNotesMd);
   el('btnBackup').addEventListener('click', downloadBackup);
@@ -1853,12 +1814,11 @@ function boot() {
       if (cur && list.indexOf(cur) !== -1) setProfile(cur);
       else if (list.length) setProfile(list[0]);
 
-      var imported = importFromHash();
       applyInitialDay();
       setView('programme');
-      if (!PROFILE && !imported) openProfile(true);
-      // if a profile already exists (returning user, or opened via a share link),
-      // show the guide once. New users get it after entering their name instead.
+      if (!PROFILE) openProfile(true);
+      // if a profile already exists (returning user), show the guide once.
+      // New users get it after entering their name instead.
       else maybeShowHelp();
 
       // Warm the abstracts once the programme is on screen, so opening a talk is

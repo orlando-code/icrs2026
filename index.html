@@ -123,7 +123,7 @@ if (window.ICRS_SITE_MODE === 'personal') {
   <label class="filter-check hide-past-check mine-hide-past">
     <input type="checkbox" id="hidePastMine"> <span>Hide finished talks</span>
   </label>
-  <p class="mine-note" id="mineNote">Picks and notes are stored in this browser only. Clearing site data removes them. Share links move picks between devices, not notes — use <b>Backup</b> / <b>Restore</b> for that.</p>
+  <p class="mine-note" id="mineNote">Picks and notes are stored in this browser only. Clearing site data removes them. Use <b>Backup</b> / <b>Restore</b> to move them between devices.</p>
   <div id="cloudSyncPanel" class="cloud-sync" hidden>
     <div class="cloud-sync-head">
       <b>Sync across devices</b>
@@ -138,7 +138,6 @@ if (window.ICRS_SITE_MODE === 'personal') {
     </div>
   </div>
   <div class="mine-bar">
-    <button id="btnShare" class="btn" type="button">Copy share link</button>
     <button id="btnIcs" class="btn" type="button">Add to calendar (.ics)</button>
     <button id="btnNotesMd" class="btn" type="button">Notes (.md)</button>
     <button id="btnBackup" class="btn" type="button">Backup</button>
@@ -213,7 +212,6 @@ if (window.ICRS_SITE_MODE === 'personal') {
       <ul class="help-tips">
         <li><span class="ti">↕️</span><div><b>Sort and collapse.</b> Use <b>Sort</b> to group the day by time, room, session or topic. Tap any session header to fold it away, or <b>Collapse all</b> to see just the headers — collapsed sessions still show how many talks you've picked or noted inside.</div></li>
         <li><span class="ti">📅</span><div><b>Add to your calendar.</b> In My schedule, <b>Add to calendar (.ics)</b> downloads your picks with times, rooms and your notes.</div></li>
-        <li><span class="ti">🔗</span><div><b>Share your schedule.</b> <b>Copy share link</b> moves starred talks to another device. <b>Notes are not included</b> &mdash; use Backup or Notes (.md) instead.</div></li>
         <li><span class="ti">📝</span><div><b>Take notes.</b> Add notes and <b>Revisit</b> / <b>Contact</b> tags in any talk. Notes stay on this device and <b>disappear if you clear browser data</b>. Export or back them up from My schedule.</div></li>
         <li><span class="ti">💾</span><div><b>Back up your data.</b> <b>Backup</b> saves picks and notes for every profile. <b>Restore</b> on the same site address (e.g. the GitHub Pages URL) to recover them on another device.</div></li>
         <li><span class="ti">📲</span><div><b>Works offline.</b> Add the page to your home screen and it keeps working with no wifi — handy in the session rooms.</div></li>
